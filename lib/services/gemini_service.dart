@@ -11,12 +11,11 @@ class GeminiService {
     final setAlarmDecl = FunctionDeclaration(
       'set_alarm',
       'Pasang alarm otomatis di HP user berdasarkan jam dan alasan.',
-      Schema(
-        SchemaType.object,
+      Schema.object(
         properties: {
-          'hour': Schema(SchemaType.integer, description: 'Jam format 24-jam (0-23)'),
-          'minute': Schema(SchemaType.integer, description: 'Menit (0-59)'),
-          'label': Schema(SchemaType.string, description: 'Alasan atau nama alarm'),
+          'hour': Schema.integer(description: 'Jam format 24-jam (0-23)'),
+          'minute': Schema.integer(description: 'Menit (0-59)'),
+          'label': Schema.string(description: 'Alasan atau nama alarm'),
         },
         requiredProperties: ['hour', 'minute', 'label'],
       ),
@@ -25,17 +24,16 @@ class GeminiService {
     final recallHistoryDecl = FunctionDeclaration(
       'recall_history',
       'Cari obrolan masa lalu jika user minta mengulang omongan sebelumnya.',
-      Schema(
-        SchemaType.object,
+      Schema.object(
         properties: {
-          'keyword': Schema(SchemaType.string, description: 'Kata kunci topik obrolan'),
+          'keyword': Schema.string(description: 'Kata kunci topik obrolan'),
         },
         requiredProperties: ['keyword'],
       ),
     );
 
     _model = GenerativeModel(
-      model: 'gemini-1.5-pro',
+      model: 'gemini-2.5-flash',
       apiKey: AppConstants.geminiApiKey,
       systemInstruction: Content.system(AppConstants.systemInstruction),
       tools: [
@@ -61,16 +59,16 @@ class GeminiService {
       if (chunk.functionCalls.isNotEmpty) {
         for (final call in chunk.functionCalls) {
           if (call.name == 'set_alarm') {
-            final hour = call.args['hour'] as int;
-            final minute = call.args['minute'] as int;
-            final label = call.args['label'] as String;
+            final hour = (call.args['hour'] as num).toInt();
+            final minute = (call.args['minute'] as num).toInt();
+            final label = call.args['label'].toString();
             await SystemActions.setNativeAlarm(hour: hour, minute: minute, label: label);
 
             final confirm = 'Sip bro, alarm jam ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} buat $label udah gua pasangin.';
             fullReply.write(confirm);
             yield confirm;
           } else if (call.name == 'recall_history') {
-            final keyword = call.args['keyword'] as String;
+            final keyword = call.args['keyword'].toString();
             final logs = await DatabaseHelper.instance.searchMemory(keyword);
             final memoryText = logs.isEmpty
                 ? 'Gak ketemu di riwayat.'

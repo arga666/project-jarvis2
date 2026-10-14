@@ -26,22 +26,52 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Generate Android Folder & Apply Custom Manifest
+      - name: Generate Clean Android Project & Apply Custom Manifest
         run: |
-          cp pubspec.yaml pubspec.yaml.bak
-          cp lib/main.dart lib/main.dart.bak
-          flutter create --platforms=android --org com.arga666 .
-          mv pubspec.yaml.bak pubspec.yaml
-          mv lib/main.dart.bak lib/main.dart
+          mkdir -p /tmp/jarvis_backup
+          mv pubspec.yaml /tmp/jarvis_backup/
+          mv lib /tmp/jarvis_backup/
+          flutter create --platforms=android --org com.arga666 --project-name project_jarvis .
+          rm -rf pubspec.yaml lib test
+          mv /tmp/jarvis_backup/pubspec.yaml .
+          mv /tmp/jarvis_backup/lib .
           cp config/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' android/app/build.gradle
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/g' android/app/build.gradle
+
+      - name: Fix Gradle Namespace & JVM Target for Plugins
+        run: |
+          cat << 'GRADLE_EOF' >> android/build.gradle
+
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 34
+                          compileOptions {
+                              sourceCompatibility JavaVersion.VERSION_17
+                              targetCompatibility JavaVersion.VERSION_17
+                          }
+                          if (namespace == null) {
+                              namespace project.group.toString()
+                          }
+                      }
+                  }
+                  project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                      kotlinOptions {
+                          jvmTarget = "17"
+                      }
+                  }
+              }
+          }
+          GRADLE_EOF
 
       - name: Install Dependencies
         run: flutter pub get
 
       - name: Build Release APK
-        run: flutter build apk --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+        run: flutter build apk --release --no-tree-shake-icons --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
